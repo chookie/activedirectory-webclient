@@ -9,7 +9,11 @@
         credentials: {
             clientID: '1234567890',
             clientSecret: '1234567890'
-        }
+        },
+        issuer: [
+          '1234567890',
+          '1234567890'
+        ]
     }
 */
 var defer = require('config/defer').deferConfig;
@@ -20,7 +24,7 @@ module.exports = {
         sessionSecret: '*** Do not past here.  Put in local file and DO NOT COMMIT.  ***'
     },
     // https://github.com/AzureAD/passport-azure-ad
-    // TODO: validateIssuer should not be false for prod
+    // validateIssuer should be true for prod
     credentials: {
         clientID: '*** Do not past here.  Put in local file and DO NOT COMMIT.  ***',
         clientSecret: '*** Do not past here.  Put in local file and DO NOT COMMIT.  ***',
@@ -31,6 +35,10 @@ module.exports = {
         responseType: 'code id_token',
         responseMode: 'form_post',
         passReqToCallback: false,
-        validateIssuer: false
+        validateIssuer: true,
+        issuer: [
+          '*** Do not past here.  Put in local file and DO NOT COMMIT.  ***',
+          '*** Do not past here.  Put in local file and DO NOT COMMIT.  ***'
+        ]
     }
 }

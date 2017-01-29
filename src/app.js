@@ -46,7 +46,10 @@ app.use(session({
 }));
 passport.use(new OIDCStrategy(config.credentials, (iss, sub, profile, access_token, refresh_token, params, done) => {
   done(null, {
-profile, access_token, refresh_token, id_token: params.id_token
+    profile,
+    access_token,
+    refresh_token,
+    id_token: params.id_token
   })
 }));
 const users = {};
