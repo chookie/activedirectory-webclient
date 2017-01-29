@@ -1,3 +1,5 @@
+// https://github.com/lorenwest/node-config
+
 /* Create a local config file to override some values
     module.exports = {
         server: {
@@ -10,12 +12,11 @@
         }
     }
 */
-
-const port = process.env.port || 8080;
+var defer = require('config/defer').deferConfig;
 
 module.exports = {
     server: {
-        port: port,
+        port: process.env.port || 8080,
         sessionSecret: '*** Do not past here.  Put in local file and DO NOT COMMIT.  ***'
     },
     // https://github.com/AzureAD/passport-azure-ad
@@ -23,11 +24,13 @@ module.exports = {
     credentials: {
         clientID: '*** Do not past here.  Put in local file and DO NOT COMMIT.  ***',
         clientSecret: '*** Do not past here.  Put in local file and DO NOT COMMIT.  ***',
-        redirectUrl: `https://localhost:${port}/auth/openid/return`,
+        redirectUrl :  defer(function (cfg) {
+          return `https://localhost:${cfg.server.port}/auth/openid/return`;
+        }),
         identityMetadata: 'https://login.microsoftonline.com/common/.well-known/openid-configuration',
         responseType: 'code id_token',
         responseMode: 'form_post',
-        passReqToCallback: true,
+        passReqToCallback: false,
         validateIssuer: false
     }
 }

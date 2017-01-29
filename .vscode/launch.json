@@ -13,7 +13,7 @@
         },
         {
             "name": "Attach to Process",
-            "type": "node2",
+            "type": "node",
             "request": "attach",
             "port": 9229
         }
