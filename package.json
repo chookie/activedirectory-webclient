@@ -4,6 +4,7 @@
   "description": "https://docs.microsoft.com/en-gb/azure/active-directory/develop/active-directory-devquickstarts-openidconnect-nodejs",
   "main": "app.js",
   "scripts": {
+    "preinstall": "node src/tools/nodeVersionCheck.js",
     "start": "nodemon src/app.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
@@ -19,12 +20,14 @@
   "homepage": "https://github.com/chookie/activedirectory-webclient#readme",
   "dependencies": {
     "body-parser": "^1.16.0",
+    "bunyan": "^1.8.5",
     "config": "^1.24.0",
     "cookie-parser": "^1.4.3",
     "ejs": "^2.5.5",
     "express": "^4.14.1",
     "express-session": "^1.15.0",
     "http": "0.0.0",
+    "method-override": "^2.3.7",
     "morgan": "^1.7.0",
     "passport": "^0.3.2",
     "passport-azure-ad": "^3.0.4"
