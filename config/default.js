@@ -38,13 +38,14 @@ module.exports = {
         grant_type: 'authorization_code',
         responseMode: 'query',
         passReqToCallback: false,
+        validateIssuer: true,
         issuer: [
           '*** Do not past here.  Put in local file and DO NOT COMMIT.  ***',
           '*** Do not past here.  Put in local file and DO NOT COMMIT.  ***'
         ],
-        loggingLevel: 'info',
-        scope: ['user_impersonation', 'User.Read', 'Mail.Send','Profile'],
-        //resource: 'https://graph.microsoft.com/'
-        resource: 'https://cardano.com/31793b90-057a-4994-84ad-e07b5d21a05f'
+        loggingLevel: 'info'
+        // scope: ['user_impersonation', 'User.Read', 'Mail.Send','Profile'],
+        // //resource: 'https://graph.microsoft.com/'
+        // resource: 'https://cardano.com/31793b90-057a-4994-84ad-e07b5d21a05f'
     }
 }

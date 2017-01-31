@@ -74,6 +74,7 @@ app.use(session({
 passport.use(new OIDCStrategy(config.credentials,
   function(iss, sub, profile, access_token, refresh_token, params, done) {
     log.debug("Access Token=",access_token);
+    //done(null, {id: profile.oid, name: profile.displayName, email: profile.upn, photoURL: "", token: params.id_token });
     done (null, {
       profile,
       access_token,
@@ -115,7 +116,6 @@ app.get('/webapi', ensureAuthenticated, function(req, res) {
   const options = {
     uri: `https://127.0.0.1:50000/helloSecure/test`,
     headers: {
-      // Authorization: 'Bearer ' + 'eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiIsIng1dCI6Ilk0dWVLMm9hSU5RaVFiNVlFQlNZVnlEY3BBVSIsImtpZCI6Ilk0dWVLMm9hSU5RaVFiNVlFQlNZVnlEY3BBVSJ9.eyJhdWQiOiJodHRwczovL2NhcmRhbm8uY29tLzMxNzkzYjkwLTA1N2EtNDk5NC04NGFkLWUwN2I1ZDIxYTA1ZiIsImlzcyI6Imh0dHBzOi8vc3RzLndpbmRvd3MubmV0LzJiNGRhM2JkLTcxZDQtNDU2Yy1hZDFiLTYzYjc4ODc3MmEwZC8iLCJpYXQiOjE0ODU4NjQwMzMsIm5iZiI6MTQ4NTg2NDAzMywiZXhwIjoxNDg1ODY3OTMzLCJhY3IiOiIxIiwiYW1yIjpbInB3ZCJdLCJhcHBpZCI6ImU0YTc2YWM3LTgwNGQtNDhjMS1hN2VjLTNkNzFhN2ZiMDZiOSIsImFwcGlkYWNyIjoiMSIsImZhbWlseV9uYW1lIjoiSm9obnN0b24iLCJnaXZlbl9uYW1lIjoiQWxpc29uIiwiaXBhZGRyIjoiMjE3LjEzOC4xNi44MiIsIm5hbWUiOiJBbGlzb24gSm9obnN0b24iLCJvaWQiOiIyYjk4ODEyOC02YmM2LTQ0OWEtOWI3Mi0xM2I2Mzg5NzUyNDkiLCJvbnByZW1fc2lkIjoiUy0xLTUtMjEtMzYyNzU5NDM5MS0zODMyNDE2MzQ1LTIxMTY5OTU5NjctNzk4NSIsInBsYXRmIjoiNSIsInNjcCI6InVzZXJfaW1wZXJzb25hdGlvbiIsInN1YiI6Ik4yUzhCa05kVEtHMlJqY3U5eFZJSHZnOWxNcTBlTzlXWGl2X0VLRm0yajAiLCJ0aWQiOiIyYjRkYTNiZC03MWQ0LTQ1NmMtYWQxYi02M2I3ODg3NzJhMGQiLCJ1bmlxdWVfbmFtZSI6IkEuSm9obnN0b25AY2FyZGFuby5jb20iLCJ1cG4iOiJBLkpvaG5zdG9uQGNhcmRhbm8uY29tIiwidmVyIjoiMS4wIn0.ch4h0sehQrl7r9vobMsM5y6JqfzAfVPO-0boqIBgDPoe51S9GWlOduoCw7z0dMDTP7UokB3fXpliFve_FLCRB00taG3Em4P3oH7JCoaj7bMDph143t1SMn0kS1hVCPoN8IXqs0TgLDzdiiivc72Zj8TLwbf6OF_Q2TtrLkf-2Nr_6sZcC2suY9GoTPwNPzsHO3DUxKMS5VazSxMGSoz13QNMKWeGxI1H4u5pdqwnLxud4LdZuiQE03hsK-DmQiKKGGNX378tpDjhTGU-GGQsdkDBLyUYaZ41asZWzqFcO6IgiLlF2pyIQaBqpUO6b6a35F_rjQVZiLpzP5BoM-TFFg',
       Authorization: 'Bearer ' + req.user.id_token,
     },
     method: 'GET',
