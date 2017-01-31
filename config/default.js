@@ -34,7 +34,8 @@ module.exports = {
           return `https://localhost:${cfg.server.port}/auth/openid/return`;
         }),
         identityMetadata: 'https://login.microsoftonline.com/common/.well-known/openid-configuration',
-        responseType: 'code id_token',
+        responseType: 'id_token code',
+        grant_type: 'authorization_code',
         responseMode: 'query',
         passReqToCallback: false,
         issuer: [
@@ -42,8 +43,8 @@ module.exports = {
           '*** Do not past here.  Put in local file and DO NOT COMMIT.  ***'
         ],
         loggingLevel: 'info',
-        // scope: ['user_impersonation', 'Profile'],
-        // resource: 'https://graph.microsoft.com/'
-        // resource: 'https://cardano.com/31793b90-057a-4994-84ad-e07b5d21a05f'
+        scope: ['user_impersonation', 'User.Read', 'Mail.Send','Profile'],
+        //resource: 'https://graph.microsoft.com/'
+        resource: 'https://cardano.com/31793b90-057a-4994-84ad-e07b5d21a05f'
     }
 }

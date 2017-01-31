@@ -15,6 +15,7 @@ const OIDCStrategy = require('passport-azure-ad').OIDCStrategy;
 const bunyan = require('bunyan');
 const PrettyStream = require('bunyan-prettystream');
 const OAuth = require('oauth');
+const rp = require('request-promise');
 
 const app = express();
 
@@ -71,11 +72,14 @@ app.use(session({
 }));
 
 passport.use(new OIDCStrategy(config.credentials,
-  function(iss, sub, profile, accessToken, refreshToken, done) {
+  function(iss, sub, profile, access_token, refresh_token, params, done) {
+    log.debug("Access Token=",access_token);
     done (null, {
       profile,
-      accessToken,
-      refreshToken
+      access_token,
+      refresh_token,
+      id_token: params.id_token,
+      params
     })
   }
 ));
@@ -105,6 +109,60 @@ app.get('/account', ensureAuthenticated, function(req, res) {
   res.render('account', { user: req.user });
 });
 
+app.get('/webapi', ensureAuthenticated, function(req, res) {
+  log.debug('Call /webapi', req.user.id_token);
+
+  const options = {
+    uri: `https://127.0.0.1:50000/helloSecure/test`,
+    headers: {
+      // Authorization: 'Bearer ' + 'eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiIsIng1dCI6Ilk0dWVLMm9hSU5RaVFiNVlFQlNZVnlEY3BBVSIsImtpZCI6Ilk0dWVLMm9hSU5RaVFiNVlFQlNZVnlEY3BBVSJ9.eyJhdWQiOiJodHRwczovL2NhcmRhbm8uY29tLzMxNzkzYjkwLTA1N2EtNDk5NC04NGFkLWUwN2I1ZDIxYTA1ZiIsImlzcyI6Imh0dHBzOi8vc3RzLndpbmRvd3MubmV0LzJiNGRhM2JkLTcxZDQtNDU2Yy1hZDFiLTYzYjc4ODc3MmEwZC8iLCJpYXQiOjE0ODU4NjQwMzMsIm5iZiI6MTQ4NTg2NDAzMywiZXhwIjoxNDg1ODY3OTMzLCJhY3IiOiIxIiwiYW1yIjpbInB3ZCJdLCJhcHBpZCI6ImU0YTc2YWM3LTgwNGQtNDhjMS1hN2VjLTNkNzFhN2ZiMDZiOSIsImFwcGlkYWNyIjoiMSIsImZhbWlseV9uYW1lIjoiSm9obnN0b24iLCJnaXZlbl9uYW1lIjoiQWxpc29uIiwiaXBhZGRyIjoiMjE3LjEzOC4xNi44MiIsIm5hbWUiOiJBbGlzb24gSm9obnN0b24iLCJvaWQiOiIyYjk4ODEyOC02YmM2LTQ0OWEtOWI3Mi0xM2I2Mzg5NzUyNDkiLCJvbnByZW1fc2lkIjoiUy0xLTUtMjEtMzYyNzU5NDM5MS0zODMyNDE2MzQ1LTIxMTY5OTU5NjctNzk4NSIsInBsYXRmIjoiNSIsInNjcCI6InVzZXJfaW1wZXJzb25hdGlvbiIsInN1YiI6Ik4yUzhCa05kVEtHMlJqY3U5eFZJSHZnOWxNcTBlTzlXWGl2X0VLRm0yajAiLCJ0aWQiOiIyYjRkYTNiZC03MWQ0LTQ1NmMtYWQxYi02M2I3ODg3NzJhMGQiLCJ1bmlxdWVfbmFtZSI6IkEuSm9obnN0b25AY2FyZGFuby5jb20iLCJ1cG4iOiJBLkpvaG5zdG9uQGNhcmRhbm8uY29tIiwidmVyIjoiMS4wIn0.ch4h0sehQrl7r9vobMsM5y6JqfzAfVPO-0boqIBgDPoe51S9GWlOduoCw7z0dMDTP7UokB3fXpliFve_FLCRB00taG3Em4P3oH7JCoaj7bMDph143t1SMn0kS1hVCPoN8IXqs0TgLDzdiiivc72Zj8TLwbf6OF_Q2TtrLkf-2Nr_6sZcC2suY9GoTPwNPzsHO3DUxKMS5VazSxMGSoz13QNMKWeGxI1H4u5pdqwnLxud4LdZuiQE03hsK-DmQiKKGGNX378tpDjhTGU-GGQsdkDBLyUYaZ41asZWzqFcO6IgiLlF2pyIQaBqpUO6b6a35F_rjQVZiLpzP5BoM-TFFg',
+      Authorization: 'Bearer ' + req.user.id_token,
+    },
+    method: 'GET',
+    rejectUnauthorized: false,
+    requestCert: true,
+    agent: false,
+    json: true
+  };
+
+   rp(options)
+      .then(function (repos) {
+        console.log('User has %d repos', repos.length);
+              res.send(repos);
+      })
+      .catch(function (err) {
+        console.log('rp error ', err.message);
+              res.send(err);
+      });
+});
+
+// app.get('/webapi', ensureAuthenticated, function(req, res) {
+//   log.debug('Call /webapi');
+//   https.get({
+//     host: "https://127.0.0.1:50000",
+//     path: '/hello/test',
+//     port: 50000
+//   }, (res) => {
+//     res.setEncoding('utf8');
+//     console.log("HTTPS Response Status: ", res.statusCode);
+//     console.log("HTTPS Response Headers: ", res.headers)
+//   });
+// });
+//   https.request({
+//           hostname: "https://127.0.0.1:50000",
+//           path: '/hello/test',
+//           port: 50000,
+//           method: 'GET',
+//           headers: {Authorization: 'Bearer ' + req.user.token, Accept: "application/json"}
+//       },(rs) => {
+//           console.log("HTTPS Response Status: ", rs.statusCode);
+//           console.log("HTTPS Response Headers: ", rs.headers)
+//           rs.on('data', (d) => {
+//               res.send(d)
+//           })
+//       }).end();
+// });
+
 const httpOptions = {
   key: fs.readFileSync('./src/tools/rsa-key.pem'),
   cert: fs.readFileSync('./src/tools/rsa-cert.pem')
@@ -132,6 +190,7 @@ app.get('/auth/openid',
 app.get('/auth/openid/return',
   passport.authenticate('azuread-openidconnect', { failureRedirect: '/' }),
   (req, res) => {
+    log.debug(req.user);
     log.debug('We received a Get return from AzureAD.');
     res.redirect('/');
   });
