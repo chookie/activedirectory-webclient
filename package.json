@@ -21,6 +21,7 @@
   "dependencies": {
     "body-parser": "^1.16.0",
     "bunyan": "^1.8.5",
+    "bunyan-prettystream": "^0.1.3",
     "config": "^1.24.0",
     "cookie-parser": "^1.4.3",
     "ejs": "^2.5.5",
@@ -29,6 +30,8 @@
     "http": "0.0.0",
     "method-override": "^2.3.7",
     "morgan": "^1.7.0",
+    "node-uuid": "^1.4.7",
+    "oauth": "^0.9.15",
     "passport": "^0.3.2",
     "passport-azure-ad": "^3.0.4"
   },

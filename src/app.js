@@ -13,6 +13,8 @@ const uuid = require('uuid');
 const methodOverride = require('method-override');
 const OIDCStrategy = require('passport-azure-ad').OIDCStrategy;
 const bunyan = require('bunyan');
+const PrettyStream = require('bunyan-prettystream');
+const OAuth = require('oauth');
 
 const app = express();
 
@@ -23,7 +25,30 @@ if (config.env !== 'production') {
   app.use(morgan('combined'));
 }
 
-var log = bunyan.createLogger({name: 'azure-ad-webclient'});
+
+var prettyStdOut = process.stdout;
+var prettyErrOut = process.stderr;
+var streamType = 'stream';
+if (config.env !== 'production') {
+  prettyStdOut = new PrettyStream();
+  prettyStdOut.pipe(process.stdout);
+  prettyErrOut = new PrettyStream();
+  prettyErrOut.pipe(process.stderr);
+  streamType = 'raw';
+}
+
+var log = bunyan.createLogger({
+        name: 'foo',
+        streams: [{
+            level: 'debug',
+            type: streamType,
+            stream: prettyStdOut
+        },{
+            level: 'error',
+            type: streamType,
+            stream: prettyErrOut
+        }]
+});
 
 var port = normalizePort(config.server.port);
 app.set('port', port);
@@ -52,6 +77,7 @@ passport.use(new OIDCStrategy(config.credentials, (iss, sub, profile, access_tok
     id_token: params.id_token
   })
 }));
+
 const users = {};
 passport.serializeUser((user, done) => {
     const id = uuid.v4();
@@ -103,15 +129,70 @@ app.get('/auth/openid',
 app.get('/auth/openid/return',
   passport.authenticate('azuread-openidconnect', { failureRedirect: '/login' }),
   function(req, res) {
-    log.info('We received a Get return from AzureAD.');
-    res.redirect('/');
+    console.log('We received a Get return from AzureAD.');
+    // console.log('get:code=' + req.query.code);
+    getToken(req, res, req.query.code);
+    // res.redirect('/');
   });
+// app.get('/auth/openid/return',
+//   (req, res) => {
+//     log.debug('We received a Get return from AzureAD.');
+//     log.info(req.query.code);
+//     res.redirect('/');
+//   });
+
+const ACCESS_TOKEN_CACHE_KEY = 'ACCESS_TOKEN_CACHE_KEY';
+const REFRESH_TOKEN_CACHE_KEY = 'REFRESH_TOKEN_CACHE_KEY';
+
+function getToken(req, res, code) {
+  if (code !== undefined) {
+    getTokenFromCode(code, function (e, accessToken, refreshToken) {
+      if (e === null) {
+        console.log('access_token= ' + JSON.stringify(accessToken));
+        console.log('access_code= ' + JSON.stringify(code));
+        // cache the refresh token in a cookie and go back to index
+        res.cookie(ACCESS_TOKEN_CACHE_KEY, accessToken);
+        res.cookie(REFRESH_TOKEN_CACHE_KEY, refreshToken);
+        res.redirect('/');
+      } else {
+        console.log(JSON.parse(e.data).error_description);
+        res.status(500);
+        res.send();
+      }
+    });
+  } else {
+    res.redirect('/login');
+  }
+}
+function getTokenFromCode(code, callback) {
+  var OAuth2 = OAuth.OAuth2;
+  var oauth2 = new OAuth2(
+    config.credentials.clientID,
+    config.credentials.clientSecret,
+    'https://login.microsoftonline.com/common',
+    '/oauth2/authorize',
+    '/oauth2/token'
+  );
+
+  oauth2.getOAuthAccessToken(
+    code,
+    {
+      grant_type: 'authorization_code',
+      redirect_uri: config.credentials.redirectUrl,
+      response_mode: 'query'
+    },
+    function (e, accessToken, refreshToken) {
+      callback(e, accessToken, refreshToken);
+    }
+  );
+};
 
 // POST /auth/openid/return
 app.post('/auth/openid/return',
   passport.authenticate('azuread-openidconnect', { failureRedirect: '/login' }),
   function(req, res) {
-    log.info('We received a Post return from AzureAD.');
+    console.log('We received a Post return from AzureAD.');
+    console.log('post:code=' + req.body.code);
     res.redirect('/');
   });
 

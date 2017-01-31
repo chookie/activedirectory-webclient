@@ -16,6 +16,8 @@
         ]
     }
 */
+
+// So we can get value for port in redirecturl.
 var defer = require('config/defer').deferConfig;
 
 module.exports = {
@@ -33,12 +35,15 @@ module.exports = {
         }),
         identityMetadata: 'https://login.microsoftonline.com/common/.well-known/openid-configuration',
         responseType: 'code id_token',
-        responseMode: 'form_post',
+        responseMode: 'query',
         passReqToCallback: false,
-        validateIssuer: true,
         issuer: [
           '*** Do not past here.  Put in local file and DO NOT COMMIT.  ***',
           '*** Do not past here.  Put in local file and DO NOT COMMIT.  ***'
-        ]
+        ],
+        loggingLevel: 'info',
+        // scope: ['user_impersonation', 'Profile'],
+        // resource: 'https://graph.microsoft.com/'
+        // resource: 'https://cardano.com/31793b90-057a-4994-84ad-e07b5d21a05f'
     }
 }
