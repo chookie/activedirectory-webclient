@@ -69,14 +69,16 @@ app.use(session({
     saveUninitialized: false,
   	cookie: {secure: true}
 }));
-passport.use(new OIDCStrategy(config.credentials, (iss, sub, profile, access_token, refresh_token, params, done) => {
-  done(null, {
-    profile,
-    access_token,
-    refresh_token,
-    id_token: params.id_token
-  })
-}));
+
+passport.use(new OIDCStrategy(config.credentials,
+  function(iss, sub, profile, accessToken, refreshToken, done) {
+    done (null, {
+      profile,
+      accessToken,
+      refreshToken
+    })
+  }
+));
 
 const users = {};
 passport.serializeUser((user, done) => {
@@ -88,6 +90,7 @@ passport.deserializeUser((id, done) => {
     const user = users[id];
     done(null, user)
 });
+
 app.use(passport.initialize());
 app.use(passport.session());
 
@@ -98,7 +101,7 @@ app.get('/', function(req, res) {
 });
 
 // '/account' is only available to logged in user
-app.get('/account', function(req, res) {
+app.get('/account', ensureAuthenticated, function(req, res) {
   res.render('account', { user: req.user });
 });
 
@@ -127,72 +130,17 @@ app.get('/auth/openid',
 //   login page.  Otherwise, the primary route function function will be called,
 //   which, in this example, will redirect the user to the home page.
 app.get('/auth/openid/return',
-  passport.authenticate('azuread-openidconnect', { failureRedirect: '/login' }),
-  function(req, res) {
-    console.log('We received a Get return from AzureAD.');
-    // console.log('get:code=' + req.query.code);
-    getToken(req, res, req.query.code);
-    // res.redirect('/');
+  passport.authenticate('azuread-openidconnect', { failureRedirect: '/' }),
+  (req, res) => {
+    log.debug('We received a Get return from AzureAD.');
+    res.redirect('/');
   });
-// app.get('/auth/openid/return',
-//   (req, res) => {
-//     log.debug('We received a Get return from AzureAD.');
-//     log.info(req.query.code);
-//     res.redirect('/');
-//   });
-
-const ACCESS_TOKEN_CACHE_KEY = 'ACCESS_TOKEN_CACHE_KEY';
-const REFRESH_TOKEN_CACHE_KEY = 'REFRESH_TOKEN_CACHE_KEY';
-
-function getToken(req, res, code) {
-  if (code !== undefined) {
-    getTokenFromCode(code, function (e, accessToken, refreshToken) {
-      if (e === null) {
-        console.log('access_token= ' + JSON.stringify(accessToken));
-        console.log('access_code= ' + JSON.stringify(code));
-        // cache the refresh token in a cookie and go back to index
-        res.cookie(ACCESS_TOKEN_CACHE_KEY, accessToken);
-        res.cookie(REFRESH_TOKEN_CACHE_KEY, refreshToken);
-        res.redirect('/');
-      } else {
-        console.log(JSON.parse(e.data).error_description);
-        res.status(500);
-        res.send();
-      }
-    });
-  } else {
-    res.redirect('/login');
-  }
-}
-function getTokenFromCode(code, callback) {
-  var OAuth2 = OAuth.OAuth2;
-  var oauth2 = new OAuth2(
-    config.credentials.clientID,
-    config.credentials.clientSecret,
-    'https://login.microsoftonline.com/common',
-    '/oauth2/authorize',
-    '/oauth2/token'
-  );
-
-  oauth2.getOAuthAccessToken(
-    code,
-    {
-      grant_type: 'authorization_code',
-      redirect_uri: config.credentials.redirectUrl,
-      response_mode: 'query'
-    },
-    function (e, accessToken, refreshToken) {
-      callback(e, accessToken, refreshToken);
-    }
-  );
-};
 
 // POST /auth/openid/return
 app.post('/auth/openid/return',
   passport.authenticate('azuread-openidconnect', { failureRedirect: '/login' }),
   function(req, res) {
     console.log('We received a Post return from AzureAD.');
-    console.log('post:code=' + req.body.code);
     res.redirect('/');
   });
 
@@ -216,6 +164,15 @@ app.get('/logout', function(req, res){
   req.logout();
   res.redirect('/');
 });
+
+
+function findById(id, fn) {
+  if (users.hasOwnProperty(id)) {
+    const user = users[id];
+    return fn(null, user);
+  }
+  return fn(null, null);
+};
 
 
 // Simple route middleware to ensure user is authenticated. (Section 4)
