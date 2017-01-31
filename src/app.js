@@ -39,7 +39,7 @@ if (config.env !== 'production') {
 }
 
 var log = bunyan.createLogger({
-        name: 'foo',
+        name: config.appName,
         streams: [{
             level: 'debug',
             type: streamType,
@@ -51,7 +51,7 @@ var log = bunyan.createLogger({
         }]
 });
 
-var port = normalizePort(config.server.port);
+var port = normalizePort(config.port);
 app.set('port', port);
 app.use(methodOverride()); // lets you use PUT and DELETE http methods
 app.use(bodyParser.urlencoded({ extended: true }));
@@ -64,8 +64,8 @@ app.use(express.static(path.join(__dirname, '/src/public')));
 app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, '/views'));
 app.use(session({
-    name: 'ad-webclient',
-    secret: config.server.sessionSecret,
+    name: config.appName,
+    secret: config.sessionSecret,
     resave: false,
     saveUninitialized: false,
   	cookie: {secure: true}
@@ -73,14 +73,9 @@ app.use(session({
 
 passport.use(new OIDCStrategy(config.credentials,
   function(iss, sub, profile, access_token, refresh_token, params, done) {
-    log.debug("Access Token=",access_token);
-    //done(null, {id: profile.oid, name: profile.displayName, email: profile.upn, photoURL: "", token: params.id_token });
     done (null, {
       profile,
-      access_token,
-      refresh_token,
-      id_token: params.id_token,
-      params
+      token: params.id_token
     })
   }
 ));
@@ -111,12 +106,12 @@ app.get('/account', ensureAuthenticated, function(req, res) {
 });
 
 app.get('/webapi', ensureAuthenticated, function(req, res) {
-  log.debug('Call /webapi', req.user.id_token);
+  log.debug('Call /webapi', req.user.token);
 
   const options = {
-    uri: `https://127.0.0.1:50000/helloSecure/test`,
+    uri: `https://127.0.0.1:50000/helloSecure`,
     headers: {
-      Authorization: 'Bearer ' + req.user.id_token,
+      Authorization: 'Bearer ' + req.user.token,
     },
     method: 'GET',
     rejectUnauthorized: false,
@@ -135,33 +130,6 @@ app.get('/webapi', ensureAuthenticated, function(req, res) {
               res.send(err);
       });
 });
-
-// app.get('/webapi', ensureAuthenticated, function(req, res) {
-//   log.debug('Call /webapi');
-//   https.get({
-//     host: "https://127.0.0.1:50000",
-//     path: '/hello/test',
-//     port: 50000
-//   }, (res) => {
-//     res.setEncoding('utf8');
-//     console.log("HTTPS Response Status: ", res.statusCode);
-//     console.log("HTTPS Response Headers: ", res.headers)
-//   });
-// });
-//   https.request({
-//           hostname: "https://127.0.0.1:50000",
-//           path: '/hello/test',
-//           port: 50000,
-//           method: 'GET',
-//           headers: {Authorization: 'Bearer ' + req.user.token, Accept: "application/json"}
-//       },(rs) => {
-//           console.log("HTTPS Response Status: ", rs.statusCode);
-//           console.log("HTTPS Response Headers: ", rs.headers)
-//           rs.on('data', (d) => {
-//               res.send(d)
-//           })
-//       }).end();
-// });
 
 const httpOptions = {
   key: fs.readFileSync('./src/tools/rsa-key.pem'),
@@ -182,20 +150,14 @@ app.get('/auth/openid',
     res.redirect('/');
   });
 
-// GET /auth/openid/return
-//   Use passport.authenticate() as route middleware to authenticate the
-//   request.  If authentication fails, the user will be redirected back to the
-//   login page.  Otherwise, the primary route function function will be called,
-//   which, in this example, will redirect the user to the home page.
 app.get('/auth/openid/return',
-  passport.authenticate('azuread-openidconnect', { failureRedirect: '/' }),
+  passport.authenticate('azuread-openidconnect', { failureRedirect: '/login' }),
   (req, res) => {
     log.debug(req.user);
     log.debug('We received a Get return from AzureAD.');
     res.redirect('/');
   });
 
-// POST /auth/openid/return
 app.post('/auth/openid/return',
   passport.authenticate('azuread-openidconnect', { failureRedirect: '/login' }),
   function(req, res) {
@@ -220,10 +182,11 @@ app.get('/login',
 });
 
 app.get('/logout', function(req, res){
-  req.logout();
-  res.redirect('/');
+  req.session.destroy(function(err) {
+    req.logOut();
+    res.redirect(config.destroySessionUrl);
+  });
 });
-
 
 function findById(id, fn) {
   if (users.hasOwnProperty(id)) {
@@ -239,9 +202,6 @@ function ensureAuthenticated(req, res, next) {
   if (req.isAuthenticated()) { return next(); }
   res.redirect('/login')
 }
-
-
-// Helper functions
 
 /**
  * Allow requestes to other servers
