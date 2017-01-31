@@ -15,6 +15,7 @@ const OIDCStrategy = require('passport-azure-ad').OIDCStrategy;
 const bunyan = require('bunyan');
 const PrettyStream = require('bunyan-prettystream');
 const OAuth = require('oauth');
+const rp = require('request-promise');
 
 const app = express();
 
@@ -69,14 +70,20 @@ app.use(session({
     saveUninitialized: false,
   	cookie: {secure: true}
 }));
-passport.use(new OIDCStrategy(config.credentials, (iss, sub, profile, access_token, refresh_token, params, done) => {
-  done(null, {
-    profile,
-    access_token,
-    refresh_token,
-    id_token: params.id_token
-  })
-}));
+
+passport.use(new OIDCStrategy(config.credentials,
+  function(iss, sub, profile, access_token, refresh_token, params, done) {
+    log.debug("Access Token=",access_token);
+    //done(null, {id: profile.oid, name: profile.displayName, email: profile.upn, photoURL: "", token: params.id_token });
+    done (null, {
+      profile,
+      access_token,
+      refresh_token,
+      id_token: params.id_token,
+      params
+    })
+  }
+));
 
 const users = {};
 passport.serializeUser((user, done) => {
@@ -88,6 +95,7 @@ passport.deserializeUser((id, done) => {
     const user = users[id];
     done(null, user)
 });
+
 app.use(passport.initialize());
 app.use(passport.session());
 
@@ -98,9 +106,62 @@ app.get('/', function(req, res) {
 });
 
 // '/account' is only available to logged in user
-app.get('/account', function(req, res) {
+app.get('/account', ensureAuthenticated, function(req, res) {
   res.render('account', { user: req.user });
 });
+
+app.get('/webapi', ensureAuthenticated, function(req, res) {
+  log.debug('Call /webapi', req.user.id_token);
+
+  const options = {
+    uri: `https://127.0.0.1:50000/helloSecure/test`,
+    headers: {
+      Authorization: 'Bearer ' + req.user.id_token,
+    },
+    method: 'GET',
+    rejectUnauthorized: false,
+    requestCert: true,
+    agent: false,
+    json: true
+  };
+
+   rp(options)
+      .then(function (repos) {
+        console.log('User has %d repos', repos.length);
+              res.send(repos);
+      })
+      .catch(function (err) {
+        console.log('rp error ', err.message);
+              res.send(err);
+      });
+});
+
+// app.get('/webapi', ensureAuthenticated, function(req, res) {
+//   log.debug('Call /webapi');
+//   https.get({
+//     host: "https://127.0.0.1:50000",
+//     path: '/hello/test',
+//     port: 50000
+//   }, (res) => {
+//     res.setEncoding('utf8');
+//     console.log("HTTPS Response Status: ", res.statusCode);
+//     console.log("HTTPS Response Headers: ", res.headers)
+//   });
+// });
+//   https.request({
+//           hostname: "https://127.0.0.1:50000",
+//           path: '/hello/test',
+//           port: 50000,
+//           method: 'GET',
+//           headers: {Authorization: 'Bearer ' + req.user.token, Accept: "application/json"}
+//       },(rs) => {
+//           console.log("HTTPS Response Status: ", rs.statusCode);
+//           console.log("HTTPS Response Headers: ", rs.headers)
+//           rs.on('data', (d) => {
+//               res.send(d)
+//           })
+//       }).end();
+// });
 
 const httpOptions = {
   key: fs.readFileSync('./src/tools/rsa-key.pem'),
@@ -127,72 +188,18 @@ app.get('/auth/openid',
 //   login page.  Otherwise, the primary route function function will be called,
 //   which, in this example, will redirect the user to the home page.
 app.get('/auth/openid/return',
-  passport.authenticate('azuread-openidconnect', { failureRedirect: '/login' }),
-  function(req, res) {
-    console.log('We received a Get return from AzureAD.');
-    // console.log('get:code=' + req.query.code);
-    getToken(req, res, req.query.code);
-    // res.redirect('/');
+  passport.authenticate('azuread-openidconnect', { failureRedirect: '/' }),
+  (req, res) => {
+    log.debug(req.user);
+    log.debug('We received a Get return from AzureAD.');
+    res.redirect('/');
   });
-// app.get('/auth/openid/return',
-//   (req, res) => {
-//     log.debug('We received a Get return from AzureAD.');
-//     log.info(req.query.code);
-//     res.redirect('/');
-//   });
-
-const ACCESS_TOKEN_CACHE_KEY = 'ACCESS_TOKEN_CACHE_KEY';
-const REFRESH_TOKEN_CACHE_KEY = 'REFRESH_TOKEN_CACHE_KEY';
-
-function getToken(req, res, code) {
-  if (code !== undefined) {
-    getTokenFromCode(code, function (e, accessToken, refreshToken) {
-      if (e === null) {
-        console.log('access_token= ' + JSON.stringify(accessToken));
-        console.log('access_code= ' + JSON.stringify(code));
-        // cache the refresh token in a cookie and go back to index
-        res.cookie(ACCESS_TOKEN_CACHE_KEY, accessToken);
-        res.cookie(REFRESH_TOKEN_CACHE_KEY, refreshToken);
-        res.redirect('/');
-      } else {
-        console.log(JSON.parse(e.data).error_description);
-        res.status(500);
-        res.send();
-      }
-    });
-  } else {
-    res.redirect('/login');
-  }
-}
-function getTokenFromCode(code, callback) {
-  var OAuth2 = OAuth.OAuth2;
-  var oauth2 = new OAuth2(
-    config.credentials.clientID,
-    config.credentials.clientSecret,
-    'https://login.microsoftonline.com/common',
-    '/oauth2/authorize',
-    '/oauth2/token'
-  );
-
-  oauth2.getOAuthAccessToken(
-    code,
-    {
-      grant_type: 'authorization_code',
-      redirect_uri: config.credentials.redirectUrl,
-      response_mode: 'query'
-    },
-    function (e, accessToken, refreshToken) {
-      callback(e, accessToken, refreshToken);
-    }
-  );
-};
 
 // POST /auth/openid/return
 app.post('/auth/openid/return',
   passport.authenticate('azuread-openidconnect', { failureRedirect: '/login' }),
   function(req, res) {
     console.log('We received a Post return from AzureAD.');
-    console.log('post:code=' + req.body.code);
     res.redirect('/');
   });
 
@@ -216,6 +223,15 @@ app.get('/logout', function(req, res){
   req.logout();
   res.redirect('/');
 });
+
+
+function findById(id, fn) {
+  if (users.hasOwnProperty(id)) {
+    const user = users[id];
+    return fn(null, user);
+  }
+  return fn(null, null);
+};
 
 
 // Simple route middleware to ensure user is authenticated. (Section 4)
