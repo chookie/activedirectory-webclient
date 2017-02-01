@@ -16,6 +16,7 @@ const bunyan = require('bunyan');
 const PrettyStream = require('bunyan-prettystream');
 const OAuth = require('oauth');
 const rp = require('request-promise');
+const graph = require('msgraph-sdk-javascript');
 
 const app = express();
 
@@ -39,16 +40,16 @@ if (config.env !== 'production') {
 }
 
 var log = bunyan.createLogger({
-        name: config.appName,
-        streams: [{
-            level: 'debug',
-            type: streamType,
-            stream: prettyStdOut
-        },{
-            level: 'error',
-            type: streamType,
-            stream: prettyErrOut
-        }]
+  name: config.appName,
+  streams: [{
+    level: 'debug',
+    type: streamType,
+    stream: prettyStdOut
+  }, {
+    level: 'error',
+    type: streamType,
+    stream: prettyErrOut
+  }]
 });
 
 var port = normalizePort(config.port);
@@ -56,7 +57,7 @@ app.set('port', port);
 app.use(methodOverride()); // lets you use PUT and DELETE http methods
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(bodyParser.text());
-app.use(bodyParser.json({ type: 'application/json'}));
+app.use(bodyParser.json({ type: 'application/json' }));
 app.use(allowCrossDomain);
 app.use(express.static(path.join(__dirname, '/src/public')));
 // app.engine('html', require('ejs').renderFile);
@@ -64,72 +65,36 @@ app.use(express.static(path.join(__dirname, '/src/public')));
 app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, '/views'));
 app.use(session({
-    name: config.appName,
-    secret: config.sessionSecret,
-    resave: false,
-    saveUninitialized: false,
-  	cookie: {secure: true}
+  name: config.appName,
+  secret: config.sessionSecret,
+  resave: false,
+  saveUninitialized: false,
+  cookie: { secure: true }
 }));
 
 passport.use(new OIDCStrategy(config.credentials,
-  function(iss, sub, profile, access_token, refresh_token, params, done) {
-    done (null, {
+  function (iss, sub, profile, access_token, refresh_token, params, done) {
+    done(null, {
       profile,
-      token: params.id_token
+      api_token: params.id_token,
+      graph_token: access_token
     })
   }
 ));
 
 const users = {};
 passport.serializeUser((user, done) => {
-    const id = uuid.v4();
-    users[id] = user;
-    done(null, id);
+  const id = uuid.v4();
+  users[id] = user;
+  done(null, id);
 });
 passport.deserializeUser((id, done) => {
-    const user = users[id];
-    done(null, user)
+  const user = users[id];
+  done(null, user)
 });
 
 app.use(passport.initialize());
 app.use(passport.session());
-
-// app.get('/', (req, res) => res.render('index'));
-
-app.get('/', function(req, res) {
-  res.render('index', { user: req.user });
-});
-
-// '/account' is only available to logged in user
-app.get('/account', ensureAuthenticated, function(req, res) {
-  res.render('account', { user: req.user });
-});
-
-app.get('/webapi', ensureAuthenticated, function(req, res) {
-  log.debug('Call /webapi', req.user.token);
-
-  const options = {
-    uri: `https://127.0.0.1:50000/helloSecure`,
-    headers: {
-      Authorization: 'Bearer ' + req.user.token,
-    },
-    method: 'GET',
-    rejectUnauthorized: false,
-    requestCert: true,
-    agent: false,
-    json: true
-  };
-
-   rp(options)
-      .then(function (repos) {
-        console.log('User has %d repos', repos.length);
-              res.send(repos);
-      })
-      .catch(function (err) {
-        console.log('rp error ', err.message);
-              res.send(err);
-      });
-});
 
 const httpOptions = {
   key: fs.readFileSync('./src/tools/rsa-key.pem'),
@@ -145,7 +110,7 @@ server.on('listening', onListening);
 //   After authenticating, the OpenID provider will redirect the user back to this application at /auth/openid/return
 app.get('/auth/openid',
   passport.authenticate('azuread-openidconnect', { failureRedirect: '/login' }),
-  function(req, res) {
+  function (req, res) {
     log.info('Authentication was called in the Sample');
     res.redirect('/');
   });
@@ -153,49 +118,97 @@ app.get('/auth/openid',
 app.get('/auth/openid/return',
   passport.authenticate('azuread-openidconnect', { failureRedirect: '/login' }),
   (req, res) => {
-    log.debug(req.user);
     log.debug('We received a Get return from AzureAD.');
     res.redirect('/');
   });
 
 app.post('/auth/openid/return',
   passport.authenticate('azuread-openidconnect', { failureRedirect: '/login' }),
-  function(req, res) {
+  function (req, res) {
     console.log('We received a Post return from AzureAD.');
     res.redirect('/');
   });
 
 // Routes
-app.get('/', function(req, res){
+app.get('/', function (req, res) {
   res.render('index', { user: req.user });
 });
 
-app.get('/account', ensureAuthenticated, function(req, res){
+app.get('/account', ensureAuthenticated, function (req, res) {
   res.render('account', { user: req.user });
 });
 
 app.get('/login',
   passport.authenticate('azuread-openidconnect', { failureRedirect: '/login' }),
-  function(req, res) {
+  function (req, res) {
     log.info('Login was called in the Sample');
     res.redirect('/');
-});
+  });
 
-app.get('/logout', function(req, res){
-  req.session.destroy(function(err) {
+app.get('/logout', function (req, res) {
+  req.session.destroy(function (err) {
     req.logOut();
     res.redirect(config.destroySessionUrl);
   });
 });
 
-function findById(id, fn) {
-  if (users.hasOwnProperty(id)) {
-    const user = users[id];
-    return fn(null, user);
-  }
-  return fn(null, null);
-};
+app.get('/webapi', ensureAuthenticated, function (req, res) {
+  log.debug('Call /webapi', req.user.api_token);
 
+  const options = {
+    uri: `https://127.0.0.1:50000/helloSecure`,
+    headers: {
+      Authorization: 'Bearer ' + req.user.api_token,
+      'X-Correlation-ID': req.user.graph_token
+    },
+    method: 'GET',
+    rejectUnauthorized: false,
+    requestCert: true,
+    agent: false,
+    json: true
+  };
+
+  rp(options)
+    .then(function (repos) {
+      res.send(repos);
+    })
+    .catch(function (err) {
+      log.error('rp error ', err.message);
+      res.send(err);
+    });
+});
+
+app.get('/graph', ensureAuthenticated, function (req, res) {
+  getUserData(res, req.user.graph_token);
+});
+
+function getUserData(res, accessToken) {
+  log.debug('Calling graph SDK with access token',accessToken);
+  var client = graph.Client.init({
+    defaultVersion: 'v1.0',
+    debugLogging: true,
+    authProvider: function (done) {
+       done(null, accessToken
+       //'eyJ0eXAiOiJKV1QiLCJub25jZSI6IkFRQUJBQUFBQUFEUk5ZUlEzZGhSU3JtLTRLLWFkcENKbkJ5clJhZVA5bHNlMERqdWRSNmNTbkx1d21tUHBPZF9wR09DVkVqSTFIbXNSalJLNWdEMThxNkNOMG1ZVHhodTRZOHBleWxGa0w1bmtmNWZiRk42UXlBQSIsImFsZyI6IlJTMjU2IiwieDV0IjoiWTR1ZUsyb2FJTlFpUWI1WUVCU1lWeURjcEFVIiwia2lkIjoiWTR1ZUsyb2FJTlFpUWI1WUVCU1lWeURjcEFVIn0.eyJhdWQiOiJodHRwczovL2dyYXBoLm1pY3Jvc29mdC5jb20iLCJpc3MiOiJodHRwczovL3N0cy53aW5kb3dzLm5ldC8yYjRkYTNiZC03MWQ0LTQ1NmMtYWQxYi02M2I3ODg3NzJhMGQvIiwiaWF0IjoxNDg1ODg5NjE2LCJuYmYiOjE0ODU4ODk2MTYsImV4cCI6MTQ4NTg5MzUxNiwiYWNyIjoiMSIsImFtciI6WyJwd2QiXSwiYXBwX2Rpc3BsYXluYW1lIjoiR3JhcGggZXhwbG9yZXIiLCJhcHBpZCI6ImRlOGJjOGI1LWQ5ZjktNDhiMS1hOGFkLWI3NDhkYTcyNTA2NCIsImFwcGlkYWNyIjoiMCIsImVfZXhwIjoxMDgwMCwiZmFtaWx5X25hbWUiOiJKb2huc3RvbiIsImdpdmVuX25hbWUiOiJBbGlzb24iLCJpcGFkZHIiOiIyMTcuMTM4LjE2LjgyIiwibmFtZSI6IkFsaXNvbiBKb2huc3RvbiIsIm9pZCI6IjJiOTg4MTI4LTZiYzYtNDQ5YS05YjcyLTEzYjYzODk3NTI0OSIsIm9ucHJlbV9zaWQiOiJTLTEtNS0yMS0zNjI3NTk0MzkxLTM4MzI0MTYzNDUtMjExNjk5NTk2Ny03OTg1IiwicGxhdGYiOiI1IiwicHVpZCI6IjEwMDMzRkZGOUI4Qzc5QUYiLCJzY3AiOiJDYWxlbmRhcnMuUmVhZFdyaXRlIENhbGVuZGFycy5SZWFkV3JpdGUuU2hhcmVkIENvbnRhY3RzLlJlYWRXcml0ZSBDb250YWN0cy5SZWFkV3JpdGUuU2hhcmVkIERpcmVjdG9yeS5BY2Nlc3NBc1VzZXIuQWxsIERpcmVjdG9yeS5SZWFkV3JpdGUuQWxsIEZpbGVzLlJlYWRXcml0ZSBGaWxlcy5SZWFkV3JpdGUuQWxsIEZpbGVzLlJlYWRXcml0ZS5BcHBGb2xkZXIgRmlsZXMuUmVhZFdyaXRlLlNlbGVjdGVkIEdyb3VwLlJlYWRXcml0ZS5BbGwgSWRlbnRpdHlSaXNrRXZlbnQuUmVhZC5BbGwgTWFpbC5SZWFkV3JpdGUgTWFpbC5SZWFkV3JpdGUuU2hhcmVkIE1haWwuU2VuZCBNYWlsLlNlbmQuU2hhcmVkIE1haWxib3hTZXR0aW5ncy5SZWFkV3JpdGUgTm90ZXMuQ3JlYXRlIE5vdGVzLlJlYWRXcml0ZSBOb3Rlcy5SZWFkV3JpdGUuQWxsIE5vdGVzLlJlYWRXcml0ZS5DcmVhdGVkQnlBcHAgU2l0ZXMuUmVhZFdyaXRlLkFsbCBUYXNrcy5SZWFkV3JpdGUgVGFza3MuUmVhZFdyaXRlLlNoYXJlZCBVc2VyLlJlYWQgVXNlci5SZWFkQmFzaWMuQWxsIFVzZXIuUmVhZFdyaXRlIFVzZXIuUmVhZFdyaXRlLkFsbCIsInNpZ25pbl9zdGF0ZSI6WyJpbmtub3dubnR3ayJdLCJzdWIiOiJ0TWxRM3dlNHcwVTR5cGJHdG5pb3ZyVUZKUnZoZ3dzZlRBQ0ZsSnY1U2pJIiwidGlkIjoiMmI0ZGEzYmQtNzFkNC00NTZjLWFkMWItNjNiNzg4NzcyYTBkIiwidW5pcXVlX25hbWUiOiJBLkpvaG5zdG9uQGNhcmRhbm8uY29tIiwidXBuIjoiQS5Kb2huc3RvbkBjYXJkYW5vLmNvbSIsInZlciI6IjEuMCJ9.AaoDAdyDoyoDD-lDvLtMA3qwcMhcvjYehKoW-JyarlyH-kEONFinVtbtpGa8XSzg-rBpnUpLcH2__3kPM-jn7u_ICHNhOmzhdk5jkGHyKeOgG_1UvQJPsSNxfT4QfauFfnM7r-gkB_YfjO1AnlV4byi5MidouGQnlbBz-riObI7ZXetqmlglJuWl84GDid7KKLhUQ1H85l9iMxYl8PnunSYebqH-1AhXwe4d6UJF2yqtKICWJl45Dtju8ih2X8u2KS5rkzB248b4SQQw8n9Xg_B-WhHHn3j_zq_UWWWx59HuzTEWEtmWNBc0eM1TpCAMEkQtjHjQH5tkOoZ4tcRmww'
+      );
+    }
+  });
+  client.api('/me').select(["displayName", "userPrincipalName"]).get((err, me) => {
+    log.info('graph called');
+    if (err) {
+      log.error('graph error', err.message);
+      res.status(err.statusCode).json({error: err});
+      return;
+    }
+    if(!me) {
+      log.warn('graph me is null');
+      res.json({warn: 'graph me is null'});
+      return;
+    }
+    log.info('graph success', me);
+    res.json(me);;
+  });
+}
 
 // Simple route middleware to ensure user is authenticated. (Section 4)
 function ensureAuthenticated(req, res, next) {
@@ -268,6 +281,6 @@ function onListening() {
     ? 'pipe ' + addr
     : 'port ' + addr.port;
   log.info('Listening on ' + bind);
-  log.info('Started on http://localhost:' + addr.port);
-  console.info('Started on http://localhost:' + addr.port);
+  log.info('Started on https://' + config.host + ':' + addr.port);
+  console.info('Started on https://' + config.host + ':' + addr.port);
 }
