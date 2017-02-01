@@ -178,6 +178,32 @@ app.get('/webapi', ensureAuthenticated, function (req, res) {
     });
 });
 
+app.get('/graphql', ensureAuthenticated, function (req, res) {
+  log.debug('Call /webapi', req.user.api_token);
+
+  const options = {
+    uri: `https://localhost:50000/graphql?query=%7B%0A%20%20links%20%7B%0A%20%20%20%20id%0A%20%20%20%20title%0A%20%20%20%20url%0A%20%20%7D%0A%7D%0A`,
+    headers: {
+      Authorization: 'Bearer ' + req.user.api_token,
+      'X-Correlation-ID': req.user.graph_token
+    },
+    method: 'GET',
+    rejectUnauthorized: false,
+    requestCert: true,
+    agent: false,
+    json: true
+  };
+
+  rp(options)
+    .then(function (repos) {
+      res.send(repos);
+    })
+    .catch(function (err) {
+      log.error('rp error ', err.message);
+      res.send(err);
+    });
+});
+
 app.get('/graph', ensureAuthenticated, function (req, res) {
   getUserData(res, req.user.graph_token);
 });
