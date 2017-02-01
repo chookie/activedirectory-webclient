@@ -2,10 +2,8 @@
 
 /* Create a local config file to override some values
     module.exports = {
-        server: {
-            port: process.env.port || 60000,
-            sessionSecret: '1234567890'
-        },
+        port: process.env.port || 60000,
+        sessionSecret: '1234567890'
         credentials: {
             clientID: '1234567890',
             clientSecret: '1234567890'
